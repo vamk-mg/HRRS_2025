@@ -1,0 +1,40 @@
+services:
+  mariadb:
+    image: mariadb:11.4.8
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpassword
+      MARIADB_DATABASE: roomdb
+      MARIADB_USER: room_user
+      MARIADB_PASSWORD: room_pass
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - room-net
+
+  room-app:
+    image: your-docker-registry/room-app:latest
+    environment:
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_NAME: roomdb
+      DB_USER: room_user
+      DB_PASSWORD: room_pass
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mariadb
+    networks:
+      - room-net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+      update_config:
+        parallelism: 1
+        delay: 10s
+
+volumes:
+  mariadb_data:
+
+networks:
+  room-net:
