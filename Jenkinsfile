@@ -10,17 +10,10 @@ pipeline {
     stages {
 
         stage('Build Spring Boot App') {
-            agent {
-                docker {
-                    image 'maven:3.9.6-openjdk-17'
-                    args '-v /root/.m2:/root/.m2 -v $WORKSPACE:/app'
-                }
-            }
             steps {
-                dir('/app') {
-                    echo "Building Spring Boot app with Maven inside Docker..."
-                    sh 'mvn clean package -DskipTests -B'
-                }
+                echo "Building Spring Boot app with Maven..."
+                // Assumes Maven is installed on Jenkins host
+                sh 'mvn clean package -DskipTests -B'
             }
         }
 
@@ -43,23 +36,17 @@ pipeline {
 
         stage('Deploy with Docker Compose') {
             steps {
-                script {
-                    echo "Deploying application using Docker Compose..."
-                    // Detect docker-compose or fallback to docker compose
-                    def composePath = sh(script: 'which docker-compose || which docker', returnStdout: true).trim()
-                    sh "${composePath} down || true"
-                    sh "${composePath} up -d --build"
-                }
+                echo "Deploying application using Docker Compose..."
+                sh "docker compose down || true"
+                sh "docker compose up -d --build"
             }
         }
     }
 
     post {
         always {
-            script {
-                def composePath = sh(script: 'which docker-compose || which docker', returnStdout: true).trim()
-                sh "${composePath} down || true"
-            }
+            echo "Cleaning up: stopping containers if any left..."
+            sh "docker compose down || true"
         }
         success {
             echo "Pipeline completed successfully!"
