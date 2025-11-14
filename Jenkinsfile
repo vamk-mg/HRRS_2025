@@ -10,64 +10,47 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'jenkins-ci-cd', url: 'https://github.com/vamk-mg/HRRS_2025.git', credentialsId: 'github-creds'
+                // Checkout the Jenkins branch
+                git branch: 'jenkins-ci-cd', url: 'https://github.com/vamk-mg/HRRS_2025.git'
             }
         }
 
         stage('Build Spring Boot App') {
             steps {
-                echo "Building Spring Boot app using Maven Docker container..."
+                echo 'Building Spring Boot app using Maven Docker container...'
+                // Use Maven container to build without mvn installed on host
                 sh '''
-                docker run --rm \
-                    -v "$PWD":/app \
-                    -w /app \
-                    maven:3.9.6-openjdk-17 \
-                    mvn clean package -DskipTests -B
+                    docker run --rm -v $PWD:/app -w /app maven:3.9.6-openjdk-17 mvn clean package -DskipTests -B
                 '''
             }
         }
 
-        stage('Build & Push Docker Image') {
+        stage('Build Docker Image') {
             steps {
+                echo 'Building Docker image using Docker-in-Docker...'
+                sh '''
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $PWD:/app -w /app docker:24.0.5 build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                '''
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                echo 'Pushing Docker image to Docker Hub...'
                 withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    echo "Building and pushing Docker image..."
                     sh '''
-                    # Use a Docker-in-Docker container with host Docker socket
-                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD":/app -w /app docker:24.0.5 \
-                        sh -c "
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin &&
-                        docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . &&
+                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock docker:24.0.5 sh -c "
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
                         docker push ${IMAGE_NAME}:${IMAGE_TAG}
                         "
                     '''
                 }
             }
         }
-
-        stage('Deploy with Docker Compose') {
-            steps {
-                echo "Deploying containers via docker-compose..."
-                sh '''
-                docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD":/app -w /app docker/compose:2.17.3 \
-                    up -d
-                '''
-            }
-        }
     }
 
     post {
-        always {
-            echo "Cleaning up containers..."
-            sh '''
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD":/app -w /app docker/compose:2.17.3 \
-                down || true
-            '''
-        }
-        success {
-            echo 'Pipeline completed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed!'
-        }
+        success { echo 'Pipeline finished successfully!' }
+        failure { echo 'Pipeline failed!' }
     }
 }
