@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_REGISTRY = 'goshtaspm'                   // Your Docker Hub username
-        IMAGE_NAME = "${DOCKER_REGISTRY}/roomapp"       // Full image name
+        DOCKER_REGISTRY = 'goshtaspm'
+        IMAGE_NAME = "${DOCKER_REGISTRY}/roomapp"
         IMAGE_TAG = "latest"
     }
 
@@ -11,7 +11,6 @@ pipeline {
 
         stage('Build Spring Boot App') {
             agent {
-                // Use Maven Docker image to build the app
                 docker {
                     image 'maven:3.9.6-openjdk-17'
                     args '-v /root/.m2:/root/.m2 -v $WORKSPACE:/app'
@@ -45,10 +44,11 @@ pipeline {
         stage('Deploy with Docker Compose') {
             steps {
                 script {
-                    // Use docker compose on host
-                    def compose = sh(script: 'which docker-compose || which docker', returnStdout: true).trim()
-                    sh "${compose} down || true"
-                    sh "${compose} up -d --build"
+                    echo "Deploying application using Docker Compose..."
+                    // Detect docker-compose or fallback to docker compose
+                    def composePath = sh(script: 'which docker-compose || which docker', returnStdout: true).trim()
+                    sh "${composePath} down || true"
+                    sh "${composePath} up -d --build"
                 }
             }
         }
@@ -56,9 +56,10 @@ pipeline {
 
     post {
         always {
-            echo "Cleaning up: stopping containers if any left..."
-            def compose = sh(script: 'which docker-compose || which docker', returnStdout: true).trim()
-            sh "${compose} down || true"
+            script {
+                def composePath = sh(script: 'which docker-compose || which docker', returnStdout: true).trim()
+                sh "${composePath} down || true"
+            }
         }
         success {
             echo "Pipeline completed successfully!"
