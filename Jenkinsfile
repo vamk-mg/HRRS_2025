@@ -10,14 +10,6 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                // Checkout specific branch; add credentials if repo is private
-                git branch: 'jenkins-ci-cd',
-                    url: 'https://github.com/vamk-mg/HRRS_2025.git'
-            }
-        }
-
         stage('Build Spring Boot App') {
             steps {
                 script {
@@ -52,7 +44,7 @@ pipeline {
             steps {
                 script {
                     echo "Deploying application using Docker Compose..."
-                    sh "$DOCKER_COMPOSE down"
+                    sh "$DOCKER_COMPOSE down || true"
                     sh "$DOCKER_COMPOSE up -d --build"
                 }
             }
