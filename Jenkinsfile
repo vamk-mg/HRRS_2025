@@ -1,49 +1,74 @@
 pipeline {
     agent any
+
     environment {
-        DOCKER_REGISTRY = 'goshtaspm'
-        IMAGE_NAME = "${DOCKER_REGISTRY}/roomapp"
+        DOCKER_REGISTRY = 'goshtaspm'                   // Your Docker Hub username
+        IMAGE_NAME = "${DOCKER_REGISTRY}/roomapp"       // Full image name
         IMAGE_TAG = "latest"
-        SWARM_STACK_NAME = 'room-stack'
+        DOCKER_COMPOSE = '/usr/local/bin/docker-compose' // Path to docker-compose on the agent
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                git branch: 'jenkins-ci-cd', url: 'https://github.com/vamk-mg/HRRS_2025.git'
+                // Checkout specific branch; add credentials if repo is private
+                git branch: 'jenkins-ci-cd',
+                    url: 'https://github.com/vamk-mg/HRRS_2025.git'
             }
         }
 
-        stage('Build') {
+        stage('Build Spring Boot App') {
             steps {
-                sh './mvnw clean package -DskipTests'
+                script {
+                    echo "Building Spring Boot app with Maven..."
+                    sh 'mvn clean package -DskipTests -B'
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                script {
+                    echo "Building Docker image..."
+                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                }
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
-                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                script {
+                    echo "Logging in to Docker Hub and pushing image..."
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                        sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                    }
                 }
             }
         }
 
-        stage('Deploy to Swarm') {
+        stage('Deploy with Docker Compose') {
             steps {
-                sh "docker stack deploy -c docker-compose.yml ${SWARM_STACK_NAME}"
+                script {
+                    echo "Deploying application using Docker Compose..."
+                    sh "$DOCKER_COMPOSE down"
+                    sh "$DOCKER_COMPOSE up -d --build"
+                }
             }
         }
     }
 
     post {
-        success { echo 'Deployment successful!' }
-        failure { echo 'Pipeline failed!' }
+        always {
+            echo "Cleaning up: stopping containers if any left..."
+            sh "$DOCKER_COMPOSE down || true"
+        }
+        success {
+            echo "Pipeline completed successfully!"
+        }
+        failure {
+            echo "Pipeline failed!"
+        }
     }
 }
