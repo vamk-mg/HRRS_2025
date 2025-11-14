@@ -5,15 +5,21 @@ pipeline {
         DOCKER_REGISTRY = 'goshtaspm'                   // Your Docker Hub username
         IMAGE_NAME = "${DOCKER_REGISTRY}/roomapp"       // Full image name
         IMAGE_TAG = "latest"
-        DOCKER_COMPOSE = '/usr/local/bin/docker-compose' // Path to docker-compose on the agent
     }
 
     stages {
 
         stage('Build Spring Boot App') {
+            agent {
+                // Use Maven Docker image to build the app
+                docker {
+                    image 'maven:3.9.6-openjdk-17'
+                    args '-v /root/.m2:/root/.m2 -v $WORKSPACE:/app'
+                }
+            }
             steps {
-                script {
-                    echo "Building Spring Boot app with Maven..."
+                dir('/app') {
+                    echo "Building Spring Boot app with Maven inside Docker..."
                     sh 'mvn clean package -DskipTests -B'
                 }
             }
@@ -21,21 +27,17 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    echo "Building Docker image..."
-                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                }
+                echo "Building Docker image..."
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                script {
-                    echo "Logging in to Docker Hub and pushing image..."
-                    withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                        sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
-                    }
+                echo "Logging in to Docker Hub and pushing image..."
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
                 }
             }
         }
@@ -43,9 +45,10 @@ pipeline {
         stage('Deploy with Docker Compose') {
             steps {
                 script {
-                    echo "Deploying application using Docker Compose..."
-                    sh "$DOCKER_COMPOSE down || true"
-                    sh "$DOCKER_COMPOSE up -d --build"
+                    // Use docker compose on host
+                    def compose = sh(script: 'which docker-compose || which docker', returnStdout: true).trim()
+                    sh "${compose} down || true"
+                    sh "${compose} up -d --build"
                 }
             }
         }
@@ -54,7 +57,8 @@ pipeline {
     post {
         always {
             echo "Cleaning up: stopping containers if any left..."
-            sh "$DOCKER_COMPOSE down || true"
+            def compose = sh(script: 'which docker-compose || which docker', returnStdout: true).trim()
+            sh "${compose} down || true"
         }
         success {
             echo "Pipeline completed successfully!"
