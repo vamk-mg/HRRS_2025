@@ -1,26 +1,28 @@
-# Stage 1: Build the Spring Boot app
-FROM maven:3.9.6-eclipse-temurin-17 AS build
+# Stage 1: Build Spring Boot App using Maven
+FROM maven:3.9.6-openjdk-17 AS build
 WORKDIR /app
 
-# Copy pom.xml and download dependencies for caching
+# Copy Maven descriptor first for dependency caching
 COPY pom.xml .
+
+# Download dependencies for offline build
 RUN mvn dependency:go-offline
 
 # Copy source code
 COPY src ./src
 
-# Build JAR without running tests
+# Build application JAR (skip tests for faster build)
 RUN mvn clean package -DskipTests
 
-# Stage 2: Run the app
-FROM eclipse-temurin:17-jdk
+# Stage 2: Run the Spring Boot app
+FROM eclipse-temurin:17-jdk-jammy
 WORKDIR /app
 
-# Copy the JAR from Stage 1 (wildcard ensures correct name)
-COPY --from=build /app/target/*.jar room-app.jar
+# Copy built JAR from the build stage
+COPY --from=build /app/target/*.jar app.jar
 
-# Expose port 8080
+# Expose the port your app uses
 EXPOSE 8089
 
-# Run Spring Boot app
-ENTRYPOINT ["java","-jar","room-app.jar"]
+# Run the Spring Boot application
+ENTRYPOINT ["java", "-jar", "app.jar"]

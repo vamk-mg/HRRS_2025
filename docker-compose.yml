@@ -1,6 +1,6 @@
 services:
   room-app:
-    build: .              # Path to Dockerfile
+    build: .
     container_name: room-app
     ports:
       - "8089:8089"
