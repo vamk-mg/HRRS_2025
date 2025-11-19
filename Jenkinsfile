@@ -3,14 +3,14 @@ pipeline {
 
     environment {
         DOCKER_REGISTRY = 'goshtaspm'
-        IMAGE_NAME      = "${DOCKER_REGISTRY}/roomapp"
-        IMAGE_TAG       = "latest"
+        IMAGE_NAME = "${DOCKER_REGISTRY}/roomapp"
+        IMAGE_TAG = "latest"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                echo 'Checking out code from Git...'
+                echo 'Checking out Jenkins branch...'
                 git branch: 'jenkins-ci-cd', url: 'https://github.com/vamk-mg/HRRS_2025.git'
             }
         }
@@ -18,22 +18,22 @@ pipeline {
         stage('Build Spring Boot App') {
             steps {
                 echo 'Building Spring Boot app using Maven Docker container...'
-                sh '''
-                    docker run --rm \
-                        -v $PWD:/app \
-                        -w /app \
-                        maven:3.9.6-eclipse-temurin-17 \
-                        mvn clean package -DskipTests -B
-                '''
+                sh """
+                docker run --rm \
+                    -v \$WORKSPACE:/app \
+                    -w /app \
+                    maven:3.9.6-openjdk-17 \
+                    mvn clean package -DskipTests -B
+                """
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                echo 'Building Docker image...'
-                sh '''
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                '''
+                echo 'Building Docker image using Docker-in-Docker...'
+                sh """
+                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} \$WORKSPACE
+                """
             }
         }
 
@@ -41,11 +41,10 @@ pipeline {
             steps {
                 echo 'Pushing Docker image to Docker Hub...'
                 withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh '''
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
-                        docker logout
-                    '''
+                    sh """
+                    echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                    docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                    """
                 }
             }
         }
@@ -56,4 +55,3 @@ pipeline {
         failure { echo 'Pipeline failed!' }
     }
 }
-
