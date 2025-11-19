@@ -15,36 +15,13 @@ pipeline {
             }
         }
 
-        stage('Debug Workspace') {
+        stage('Build Docker Image using Docker Compose') {
             steps {
-                echo 'Listing workspace files to verify pom.xml exists'
-                sh 'ls -al $WORKSPACE'
-            }
-        }
-
-        stage('Build Spring Boot App') {
-            steps {
-                echo 'Building Spring Boot app using Maven Docker container...'
-                sh """
-                    docker run --rm \
-                        -v \$WORKSPACE:/app \
-                        -w /app \
-                        maven:3.9.6-eclipse-temurin-17 \
-                        mvn clean package -DskipTests -B
-                """
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                echo 'Building Docker image using Docker-in-Docker...'
-                sh """
-                    docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v \$WORKSPACE:/app \
-                        -w /app \
-                        docker:24.0.5 build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                """
+                echo 'Building Docker image using Docker Compose...'
+                // Ensure docker-compose.yml is in your repo root
+                sh '''
+                    docker-compose build
+                '''
             }
         }
 
@@ -52,21 +29,21 @@ pipeline {
             steps {
                 echo 'Pushing Docker image to Docker Hub...'
                 withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh """
-                        docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            docker:24.0.5 sh -c \"
-                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                            docker push ${IMAGE_NAME}:${IMAGE_TAG}
-                            \"
-                    """
+                    sh '''
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker-compose push
+                    '''
                 }
             }
         }
     }
 
     post {
-        success { echo 'Pipeline finished successfully!' }
-        failure { echo 'Pipeline failed!' }
+        success {
+            echo 'Pipeline finished successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
     }
 }
