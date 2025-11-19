@@ -10,18 +10,14 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                echo 'Checking out Jenkins branch...'
                 git branch: 'jenkins-ci-cd', url: 'https://github.com/vamk-mg/HRRS_2025.git'
             }
         }
 
-        stage('Build Docker Image using Docker Compose') {
+        stage('Build Docker Image') {
             steps {
                 echo 'Building Docker image using Docker Compose...'
-                // Ensure docker-compose.yml is in your repo root
-                sh '''
-                    docker-compose build
-                '''
+                sh 'docker-compose build'
             }
         }
 
@@ -39,11 +35,7 @@ pipeline {
     }
 
     post {
-        success {
-            echo 'Pipeline finished successfully!'
-        }
-        failure {
-            echo 'Pipeline failed!'
-        }
+        success { echo 'Pipeline finished successfully!' }
+        failure { echo 'Pipeline failed!' }
     }
 }
