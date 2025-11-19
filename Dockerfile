@@ -18,7 +18,7 @@ pipeline {
         stage('Debug Workspace') {
             steps {
                 echo 'Listing workspace files to verify pom.xml exists'
-                sh 'ls -al $PWD'
+                sh 'ls -al'
             }
         }
 
