@@ -21,12 +21,11 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
-            steps {
-                echo 'Building Docker image...'
-                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-            }
-        }
+       stage('Build Spring Boot App') {
+         steps {
+          sh 'mvn clean package -DskipTests -B'
+         }
+      }
 
         stage('Push Docker Image') {
             steps {
