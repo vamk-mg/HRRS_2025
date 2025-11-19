@@ -1,46 +1,26 @@
-pipeline {
-    agent any
+# Stage 1: Build Spring Boot App
+FROM maven:3.9.6-eclipse-temurin-17 AS build
+WORKDIR /app
 
-    environment {
-        DOCKER_REGISTRY = 'goshtaspm'
-        IMAGE_NAME = "${DOCKER_REGISTRY}/roomapp"
-        IMAGE_TAG = "latest"
-    }
+# Copy Maven descriptor first to cache dependencies
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
 
-    stages {
-        stage('Checkout') {
-            steps {
-                git branch: 'jenkins-ci-cd', url: 'https://github.com/vamk-mg/HRRS_2025.git'
-            }
-        }
+# Copy source code
+COPY src ./src
 
-        stage('Debug Workspace') {
-            steps {
-                echo 'Listing workspace files'
-                sh 'ls -al'
-            }
-        }
+# Build the JAR (skip tests for speed)
+RUN mvn clean package -DskipTests -B
 
-       stage('Build Spring Boot App') {
-         steps {
-          sh 'mvn clean package -DskipTests -B'
-         }
-      }
+# Stage 2: Run Spring Boot App
+FROM eclipse-temurin:17-jdk-jammy
+WORKDIR /app
 
-        stage('Push Docker Image') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh '''
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
-                    '''
-                }
-            }
-        }
-    }
+# Copy built JAR from build stage
+COPY --from=build /app/target/*.jar app.jar
 
-    post {
-        success { echo 'Pipeline finished successfully!' }
-        failure { echo 'Pipeline failed!' }
-    }
-}
+# Expose port used by the app
+EXPOSE 8089
+
+# Run Spring Boot application
+ENTRYPOINT ["java", "-jar", "app.jar"]
