@@ -2,14 +2,13 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_CREDENTIALS = credentials('docker-hub-creds')
-        IMAGE_NAME = "goshtaspm/roomapp"
-        IMAGE_TAG = "latest"
-        DOCKER_BUILDKIT = "1" // Enable BuildKit for docker-compose
+        DOCKER_HUB_USER = credentials('docker-hub-username')   // Jenkins credential ID for Docker Hub username
+        DOCKER_HUB_PSW  = credentials('docker-hub-password')   // Jenkins credential ID for Docker Hub password
+        IMAGE_NAME      = "$DOCKER_HUB_USER/room-app"      // Replace with your Docker Hub repo
     }
 
     stages {
-        stage('Checkout SCM') {
+        stage('Checkout') {
             steps {
                 echo 'Checking out source code...'
                 checkout scm
@@ -18,10 +17,10 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                echo 'Building Docker image using Docker Compose...'
+                echo 'Building Docker image using Docker Compose v2...'
                 sh '''
                     export DOCKER_BUILDKIT=1
-                    docker-compose build
+                    docker compose build
                 '''
             }
         }
@@ -29,33 +28,32 @@ pipeline {
         stage('Login to Docker Hub') {
             steps {
                 echo 'Logging in to Docker Hub...'
-                sh '''
-                    echo $DOCKER_HUB_CREDENTIALS_PSW | docker login -u $DOCKER_HUB_CREDENTIALS_USR --password-stdin
-                '''
+                sh """
+                    echo $DOCKER_HUB_PSW | docker login -u $DOCKER_HUB_USER --password-stdin
+                """
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                echo 'Pushing Docker image to Docker Hub...'
-                sh '''
-                    docker tag room-app $IMAGE_NAME:$IMAGE_TAG
-                    docker push $IMAGE_NAME:$IMAGE_TAG
-                '''
+                echo 'Tagging and pushing Docker image...'
+                sh """
+                    docker tag room-app:latest $IMAGE_NAME:latest
+                    docker push $IMAGE_NAME:latest
+                """
             }
         }
     }
 
     post {
         always {
-            echo 'Cleaning up workspace...'
-            sh 'docker logout || true'
+            echo 'Cleaning up workspace and logging out from Docker...'
+            sh 'docker logout'
+            cleanWs()
         }
-
         success {
             echo 'Pipeline completed successfully!'
         }
-
         failure {
             echo 'Pipeline failed!'
         }
