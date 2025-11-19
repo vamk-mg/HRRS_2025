@@ -1,28 +1,49 @@
-# Stage 1: Build Spring Boot App using Maven
-FROM maven:3.9.6-openjdk-17 AS build
-WORKDIR /app
+pipeline {
+    agent any
 
-# Copy Maven descriptor first for dependency caching
-COPY pom.xml .
+    environment {
+        DOCKER_REGISTRY = 'goshtaspm'
+        IMAGE_NAME = "${DOCKER_REGISTRY}/roomapp"
+        IMAGE_TAG = "latest"
+    }
 
-# Download dependencies for offline build
-RUN mvn dependency:go-offline
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out Jenkins branch...'
+                git branch: 'jenkins-ci-cd', url: 'https://github.com/vamk-mg/HRRS_2025.git'
+            }
+        }
 
-# Copy source code
-COPY src ./src
+        stage('Debug Workspace') {
+            steps {
+                echo 'Listing workspace files to verify pom.xml exists'
+                sh 'ls -al $PWD'
+            }
+        }
 
-# Build application JAR (skip tests for faster build)
-RUN mvn clean package -DskipTests
+        stage('Build Docker Image') {
+            steps {
+                echo 'Building Docker image (Maven build happens inside Dockerfile)...'
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+            }
+        }
 
-# Stage 2: Run the Spring Boot app
-FROM eclipse-temurin:17-jdk-jammy
-WORKDIR /app
+        stage('Push Docker Image') {
+            steps {
+                echo 'Pushing Docker image to Docker Hub...'
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                    '''
+                }
+            }
+        }
+    }
 
-# Copy built JAR from the build stage
-COPY --from=build /app/target/*.jar app.jar
-
-# Expose the port your app uses
-EXPOSE 8089
-
-# Run the Spring Boot application
-ENTRYPOINT ["java", "-jar", "app.jar"]
+    post {
+        success { echo 'Pipeline finished successfully!' }
+        failure { echo 'Pipeline failed!' }
+    }
+}
