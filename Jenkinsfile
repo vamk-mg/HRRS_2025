@@ -2,9 +2,8 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "room-app" // base image name
-        // Docker host socket (for Linux/Mac). For Windows, mount the named pipe when running Jenkins container.
-        DOCKER_HOST = "/var/run/docker.sock"
+        IMAGE_NAME = "goshtaspm/roomapp"
+        TAG        = "${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -16,10 +15,9 @@ pipeline {
             }
         }
 
-        stage('Verify Docker on Host') {
+        stage('Verify Docker Installation') {
             steps {
-                echo 'Verifying host Docker installation...'
-                // The Jenkins container uses the host Docker via mounted socket
+                echo 'Verifying Docker and Docker Compose inside Jenkins container...'
                 sh '''
                     docker --version
                     docker compose version || true
@@ -29,7 +27,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                echo 'Building Docker image using host Docker Compose...'
+                echo 'Building room-app Docker image using Docker Compose...'
                 sh '''
                     export DOCKER_BUILDKIT=1
                     docker compose build
@@ -57,10 +55,13 @@ pipeline {
                     usernameVariable: 'DOCKER_HUB_USER',
                     passwordVariable: 'DOCKER_HUB_PSW'
                 )]) {
-                    echo 'Tagging and pushing Docker image using host Docker...'
+                    echo 'Tagging and pushing room-app Docker image...'
                     sh '''
-                        docker tag room-app:latest $DOCKER_HUB_USER/room-app:latest
-                        docker push $DOCKER_HUB_USER/room-app:latest
+                        docker tag room-app:latest $DOCKER_HUB_USER/roomapp:${TAG}
+                        docker tag room-app:latest $DOCKER_HUB_USER/roomapp:latest
+
+                        docker push $DOCKER_HUB_USER/roomapp:${TAG}
+                        docker push $DOCKER_HUB_USER/roomapp:latest
                     '''
                 }
             }
