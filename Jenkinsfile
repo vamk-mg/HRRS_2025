@@ -2,16 +2,27 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_USER = credentials('docker-hub-username')   // Jenkins credential ID for Docker Hub username
-        DOCKER_HUB_PSW  = credentials('docker-hub-password')   // Jenkins credential ID for Docker Hub password
-        IMAGE_NAME      = "$DOCKER_HUB_USER/room-app"      // Replace with your Docker Hub repo
+        DOCKER_HUB_USER = credentials('docker-hub-username')
+        DOCKER_HUB_PSW  = credentials('docker-hub-password')
+        IMAGE_NAME      = "${DOCKER_HUB_USER}/room-app"
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 echo 'Checking out source code...'
                 checkout scm
+            }
+        }
+
+        stage('Verify Docker Installation') {
+            steps {
+                echo 'Checking Docker and Docker Compose availability...'
+                sh '''
+                    docker --version
+                    docker compose version
+                '''
             }
         }
 
@@ -29,7 +40,7 @@ pipeline {
             steps {
                 echo 'Logging in to Docker Hub...'
                 sh """
-                    echo $DOCKER_HUB_PSW | docker login -u $DOCKER_HUB_USER --password-stdin
+                    echo "$DOCKER_HUB_PSW" | docker login -u "$DOCKER_HUB_USER" --password-stdin
                 """
             }
         }
@@ -38,8 +49,8 @@ pipeline {
             steps {
                 echo 'Tagging and pushing Docker image...'
                 sh """
-                    docker tag room-app:latest $IMAGE_NAME:latest
-                    docker push $IMAGE_NAME:latest
+                    docker tag room-app:latest ${IMAGE_NAME}:latest
+                    docker push ${IMAGE_NAME}:latest
                 """
             }
         }
@@ -47,8 +58,8 @@ pipeline {
 
     post {
         always {
-            echo 'Cleaning up workspace and logging out from Docker...'
-            sh 'docker logout'
+            echo 'Cleaning up workspace and logging out...'
+            sh 'docker logout || true'
             cleanWs()
         }
         success {
