@@ -2,9 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_USER = credentials('docker-hub-username')
-        DOCKER_HUB_PSW  = credentials('docker-hub-password')
-        IMAGE_NAME      = "${DOCKER_HUB_USER}/room-app"
+        IMAGE_NAME = "room-app" // base image name
     }
 
     stages {
@@ -21,7 +19,7 @@ pipeline {
                 echo 'Checking Docker and Docker Compose availability...'
                 sh '''
                     docker --version
-                    docker compose version
+                    docker compose version || true
                 '''
             }
         }
@@ -38,20 +36,30 @@ pipeline {
 
         stage('Login to Docker Hub') {
             steps {
-                echo 'Logging in to Docker Hub...'
-                sh """
-                    echo "$DOCKER_HUB_PSW" | docker login -u "$DOCKER_HUB_USER" --password-stdin
-                """
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-hub-username',
+                    usernameVariable: 'DOCKER_HUB_USER',
+                    passwordVariable: 'DOCKER_HUB_PSW'
+                )]) {
+                    echo 'Logging in to Docker Hub securely...'
+                    sh 'echo $DOCKER_HUB_PSW | docker login -u $DOCKER_HUB_USER --password-stdin'
+                }
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                echo 'Tagging and pushing Docker image...'
-                sh """
-                    docker tag room-app:latest ${IMAGE_NAME}:latest
-                    docker push ${IMAGE_NAME}:latest
-                """
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-hub-username',
+                    usernameVariable: 'DOCKER_HUB_USER',
+                    passwordVariable: 'DOCKER_HUB_PSW'
+                )]) {
+                    echo 'Tagging and pushing Docker image...'
+                    sh '''
+                        docker tag room-app:latest $DOCKER_HUB_USER/room-app:latest
+                        docker push $DOCKER_HUB_USER/room-app:latest
+                    '''
+                }
             }
         }
     }
